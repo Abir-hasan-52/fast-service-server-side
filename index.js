@@ -6,6 +6,8 @@ const app = express();
 const port = process.env.PORT || 5000;
 // local environment variable from .env file
 dotenv.config();
+
+const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_KEY);
 // middleware
 app.use(cors());
 app.use(express.json());
@@ -56,6 +58,29 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch parcels" });
       }
     });
+
+    // gets parcel by id
+    app.get("/parcels/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        const parcel = await parcelCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (parcel) {
+          res.send(parcel);
+        } else {
+          res.status(404).send({ success: false, message: "Parcel not found" });
+        }
+      } catch (error) {
+        console.error("Error fetching parcel:", error);
+        res
+          .status(500)
+          .send({ success: false, message: "Failed to fetch parcel" });
+      }
+    });
+
     // delete parcels
     app.delete("/parcels/:id", async (req, res) => {
       try {
@@ -82,6 +107,21 @@ async function run() {
       } catch (error) {
         console.error("error inserting parcel:", error);
         res.status(500).send({ message: "failed to create parcels" });
+      }
+    });
+
+    // Create a payment intent
+    app.post("/create-payment-intent", async (req, res) => {
+      const amountInCents = req.body.amountInCents;
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+        res.json({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
       }
     });
 
